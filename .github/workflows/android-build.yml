@@ -1,0 +1,70 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SM" ]; then SM="$(command -v sdkmanager || true)"; fi
+          if [ -n "$SM" ]; then
+            yes | "$SM" --licenses > /dev/null 2>&1 || true
+            "$SM" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null 2>&1 || true
+          fi
+          echo "Android SDK ready at $SDK"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.6'
+
+      - name: Restore debug signing keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: neon-piano-debug-keystore-v1
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk NeonPiano.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeonPiano-debug-apk
+          path: NeonPiano.apk
+
+      - name: Publish APK as a Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0
+          name: Neon Piano Calculator
+          body: |
+            Download **NeonPiano.apk** below and install it on your phone.
+          files: NeonPiano.apk
+          make_latest: true
