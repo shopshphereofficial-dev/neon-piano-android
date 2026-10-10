@@ -68,3 +68,11 @@ jobs:
             Download **NeonPiano.apk** below and install it on your phone.
           files: NeonPiano.apk
           make_latest: true
+
+      - name: Publish standard app.apk release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -1)
+          cp "$APK" app.apk
+          gh release create latest app.apk --title "Latest APK" --notes "Auto-built APK from source. Direct download." --latest 2>/dev/null || gh release upload latest app.apk --clobber
